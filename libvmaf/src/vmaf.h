@@ -104,9 +104,10 @@ private:
 
 class IVmafQualityRunner {
 public:
-    virtual Result run(Asset asset, int(*read_frame)(float *ref_data, float *main_data, float *temp_data,
-        int stride, void *user_data), void *user_data, bool disable_clip, bool enable_transform,
-        bool do_psnr, bool do_ssim, bool do_ms_ssim, int n_thread, int n_subsample) = 0;
+    virtual Result run(Asset asset, int (*read_frame)(float *ref_data, float *main_data, float *temp_data, int stride, void *user_data),
+                       int (*read_frame_cb_cr)(float *ref_data, float *main_data, float *ref_data_cb, float *main_data_cb, float *ref_data_cr, float *main_data_cr, float *temp_data, int stride_byte, void *user_data),
+                       void *user_data, bool disable_clip, bool enable_transform,
+                       bool do_psnr, bool do_ssim, bool do_ms_ssim, bool do_deitp, int n_thread, int n_subsample) = 0;
     virtual ~IVmafQualityRunner() {}
 };
 
@@ -127,13 +128,13 @@ private:
 
 static const std::string BOOSTRAP_VMAF_MODEL_PREFIX = "vmaf_";
 
-double RunVmaf(const char* fmt, int width, int height,
+double RunVmaf(const char *fmt, int width, int height,
                int (*read_frame)(float *ref_data, float *main_data, float *temp_data, int stride, void *user_data),
+               int (*read_frame_cb_cr)(float *ref_data, float *main_data, float *ref_data_cb, float *main_data_cb, float *ref_data_cr, float *main_data_cr, float *temp_data, int stride_byte, void *user_data),
                void *user_data, const char *model_path, const char *log_path, const char *log_fmt,
                bool disable_clip, bool enable_transform,
-               bool do_psnr, bool do_ssim, bool do_ms_ssim,
+               bool do_psnr, bool do_ssim, bool do_ms_ssim, bool do_deitp,
                const char *pool_method, int n_thread, int n_subsample, bool enable_conf_interval);
-
 
 struct SvmDelete {
     void operator()(void *svm);
@@ -201,9 +202,14 @@ class VmafQualityRunner : public IVmafQualityRunner
 {
 public:
     VmafQualityRunner(const char *model_path): model_path(model_path) {}
-    virtual Result run(Asset asset, int (*read_frame)(float *ref_data, float *main_data, float *temp_data,
+    /* virtual Result run(Asset asset, int (*read_frame)(float *ref_data, float *main_data, float *temp_data,
                int stride, void *user_data), void *user_data, bool disable_clip, bool enable_transform,
-               bool do_psnr, bool do_ssim, bool do_ms_ssim, int n_thread, int n_subsample);
+               bool do_psnr, bool do_ssim, bool do_ms_ssim, bool do_deitp, int n_thread, int n_subsample); */
+    virtual Result run(Asset asset, int (*read_frame)(float *ref_data, float *main_data, float *temp_data, int stride, void *user_data),
+                       int (*read_frame_cb_cr)(float *ref_data, float *main_data, float *ref_data_cb, float *main_data_cb, float *ref_data_cr, float *main_data_cr,
+                                               float *temp_data, int stride, void *user_data),
+                       void *user_data, bool disable_clip, bool enable_transform,
+                       bool do_psnr, bool do_ssim, bool do_ms_ssim, bool do_deitp, int n_thread, int n_subsample);
     virtual ~VmafQualityRunner() {}
 protected:
     static void _transform_value(LibsvmNusvrTrainTestModel& model, double& prediction);

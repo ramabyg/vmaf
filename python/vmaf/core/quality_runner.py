@@ -457,6 +457,44 @@ class VmafQualityRunner(QualityRunner):
         vmaf_fassembler = self._get_vmaf_feature_assembler_instance(asset)
         vmaf_fassembler.remove_results()
 
+# Dolby DEITP Quality Runner
+class DlbDeitpVmafQualityRunner(VmafQualityRunner):
+    TYPE = 'Deitp_VMAF'
+
+    VERSION = '{}-Deitp'.format(VmafQualityRunner.VERSION)
+
+    DEFAULT_MODEL_FILEPATH = VmafConfig.model_path(
+        "other_models/nflx_data_set_vmaf_deitp.pkl")
+
+    # We obsered good prediction when only TP values are considered.
+    # So as default consider only DE TP scores
+    #DEFAULT_FEATURE_DICT = {'DEITP_feature': ['deitp_max', 'deitp_mean', 'deitp_sd'], 
+    DEFAULT_FEATURE_DICT = {'DEITP_feature': ['deTP_max', 'deTP_mean', 'deTP_sd'], 
+                            'VMAF_feature': ['vif', 'adm', 'motion', 'ansnr']}
+    # Just override below fucntion to feed optional_dict for DEITP feature assembler.
+    def _get_vmaf_feature_assembler_instance(self, asset):
+
+        # load TrainTestModel only to retrieve its 'feature_dict' extra info
+        feature_dict = self._load_model(
+            asset).get_appended_info('feature_dict')
+        if feature_dict is None:
+            feature_dict = self.DEFAULT_FEATURE_DICT
+
+        vmaf_fassembler = FeatureAssembler(
+            feature_dict=feature_dict,
+            feature_option_dict=None,
+            assets=[asset],
+            logger=self.logger,
+            fifo_mode=self.fifo_mode,
+            delete_workdir=self.delete_workdir,
+            result_store=self.result_store,
+            optional_dict=self.optional_dict,
+            optional_dict2=None,
+            parallelize=False,  # parallelization already in a higher level
+        )
+        return vmaf_fassembler
+
+
 
 class EnsembleVmafQualityRunner(VmafQualityRunner):
     TYPE = 'EnsembleVMAF'
@@ -628,7 +666,7 @@ class VmafossExecQualityRunner(QualityRunner):
     # trained with resource/param/vmaf_v6.py on private/user/zli/resource/dataset/dataset/derived/vmafplusstudy_laptop_raw_generalandcornercase.py, MLER, y=x+17
     DEFAULT_MODEL_FILEPATH = VmafConfig.model_path("vmaf_v0.6.1.pkl")
 
-    FEATURES = ['adm2', 'adm_scale0', 'adm_scale1', 'adm_scale2', 'adm_scale3',
+    FEATURES = ['adm2', 'adm_scale0', 'adm_scale1', 'adm_scale2', 'adm_scale3', 'deitp_max', 'deitp_mean', 'deitp_sd',
                 'motion', 'vif_scale0', 'vif_scale1', 'vif_scale2',
                 'vif_scale3', 'vif', 'psnr', 'ssim', 'ms_ssim', 'motion2',
                 'bagging', 'stddev', 'ci95_low', 'ci95_high']
@@ -703,6 +741,10 @@ class VmafossExecQualityRunner(QualityRunner):
             ci = self.optional_dict['ci']
         else:
             ci = False
+        if self.optional_dict is not None and 'deitp' in self.optional_dict:
+            deitp = self.optional_dict['deitp']
+        else:
+            deitp = True
 
         quality_width, quality_height = asset.quality_width_height
 
@@ -718,7 +760,7 @@ class VmafossExecQualityRunner(QualityRunner):
         ExternalProgramCaller.call_vmafossexec(fmt, w, h, ref_path, dis_path, model, log_file_path,
                                                disable_clip_score, enable_transform_score,
                                                phone_model, disable_avx, n_thread, n_subsample,
-                                               psnr, ssim, ms_ssim, ci, exe, logger)
+                                               psnr, ssim, ms_ssim, deitp, ci, exe, logger)
 
     def _get_exec(self):
         return None  # signaling default

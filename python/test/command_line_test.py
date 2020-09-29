@@ -27,9 +27,11 @@ class CommandLineTest(unittest.TestCase):
 
     def setUp(self):
         self.dataset_filename = VmafConfig.test_resource_path('example_dataset.py')
+        self.dataset_deitp_filename = VmafConfig.test_resource_path('example_dataset_deitp.py')
         self.raw_dataset_filename = VmafConfig.test_resource_path('example_raw_dataset.py')
         self.out_model_filepath = VmafConfig.workdir_path('tmp.pkl')
         self.param_filename = VmafConfig.test_resource_path('vmaf_v4.py')
+        self.param_deitp_filename = VmafConfig.test_resource_path('vmaf_deitp_params.py')
         self.batch_filename = VmafConfig.workdir_path('test_batch_input')
 
     def tearDown(self):
@@ -46,6 +48,15 @@ class CommandLineTest(unittest.TestCase):
             exe=exe, dataset=self.dataset_filename)
         ret = run_process(cmd, shell=True)
         self.assertEqual(ret, 0)
+
+    def test_run_testing_deitp_vmaf(self):
+        exe = VmafConfig.root_path(
+            'python', 'vmaf', 'script', 'run_testing.py')
+        cmd = "{exe} Deitp_VMAF {dataset} --parallelize --suppress-plot".format(
+            exe=exe, dataset=self.dataset_deitp_filename)
+        ret = run_process(cmd, shell=True)
+        self.assertEqual(ret, 0)
+
 
     def test_run_testing_vmaf_raw_dataset(self):
         exe = VmafConfig.root_path('python', 'vmaf', 'script', 'run_testing.py')
@@ -70,6 +81,18 @@ class CommandLineTest(unittest.TestCase):
             output=self.out_model_filepath)
         ret = run_process(cmd, shell=True)
         self.assertEqual(ret, 0)
+
+    def test_run_vmaf_deitp_training(self):
+        exe = VmafConfig.root_path(
+            'python', 'vmaf', 'script', 'run_vmaf_training.py')
+        cmd = "{exe} {dataset} {param} {param} {output} --parallelize --suppress-plot".format(
+            exe=exe,
+            dataset=self.dataset_deitp_filename,
+            param=self.param_deitp_filename,
+            output=self.out_model_filepath)
+        ret = run_process(cmd, shell=True)
+        self.assertEqual(ret, 0)
+
 
     def test_run_vmaf_training_raw_dataset(self):
         exe = VmafConfig.root_path('python', 'vmaf', 'script', 'run_vmaf_training.py')
@@ -106,6 +129,15 @@ class CommandLineTest(unittest.TestCase):
         exe = VmafConfig.root_path('python', 'vmaf', 'script', 'run_vmaf_in_batch.py')
         cmd = "{exe} {input} --parallelize --ci >/dev/null 2>&1".format(
             exe=exe, input=self.batch_filename)
+        ret = run_process(cmd, shell=True)
+        self.assertEqual(ret, 0)
+
+    def test_run_deitp_plus_vmaf(self):
+        exe = VmafConfig.root_path('python', 'vmaf', 'script', 'run_deitp_plus_vmaf.py')
+        line = 'yuv420p 576 324 {root}/python/test/resource/yuv/src01_hrc00_576x324.yuv ' \
+               '{root}/python/test/resource/yuv/src01_hrc01_576x324.yuv'.format(
+                   root=VmafConfig.root_path())
+        cmd = "{exe} {line} >/dev/null 2>&1".format(line=line, exe=exe)
         ret = run_process(cmd, shell=True)
         self.assertEqual(ret, 0)
 

@@ -14,3 +14,12 @@ build/
 dist/
 vmaf_output.xml
 compile_commands.json
+python/doc/
+libvmaf/doc/@DOXYGEN_OUTPUT@/
+.tags
+.tags1
+build_release/
+libvmaf/doc/
+output.json
+output.xml
+scratch.txt

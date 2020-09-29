@@ -128,7 +128,9 @@ def main():
         if save_plot_dir is None:
             DisplayConfig.show()
         else:
-            DisplayConfig.show(write_to_dir=save_plot_dir)
+            DisplayConfig.show(write_to_dir=save_plot_dir,
+                                data_set_name=train_dataset.dataset_name,
+                                model_name=os.path.splitext(output_model_filepath.split("/")[-1])[0])
 
     except ImportError:
         print_matplotlib_warning()

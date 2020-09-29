@@ -106,7 +106,7 @@ static void getMemory(int itr_ctr, int state)
 
 static int run_wrapper(char *fmt, int width, int height, char *ref_path, char *dis_path, char *model_path,
         char *log_path, char *log_fmt, bool disable_clip, bool disable_avx, bool enable_transform, bool phone_model,
-        bool do_psnr, bool do_ssim, bool do_ms_ssim, char *pool_method, int n_thread, int n_subsample, bool enable_conf_interval)
+        bool do_psnr, bool do_ssim, bool do_ms_ssim, bool do_deitp, char *pool_method, int n_thread, int n_subsample, bool enable_conf_interval)
 {
     double score;
 
@@ -191,9 +191,9 @@ static int run_wrapper(char *fmt, int width, int height, char *ref_path, char *d
     }
 
     /* Run VMAF */
-    ret = compute_vmaf(&score, fmt, width, height, read_frame, s, model_path, log_path, log_fmt,
+    ret = compute_vmaf(&score, fmt, width, height, read_frame, read_frame_cb_cr, s, model_path, log_path, log_fmt,
                        disable_clip, disable_avx, enable_transform, phone_model, do_psnr, do_ssim,
-                       do_ms_ssim, pool_method, n_thread, n_subsample, enable_conf_interval);
+                       do_ms_ssim, do_deitp, pool_method, n_thread, n_subsample, enable_conf_interval);
 
 fail_or_end:
     if (s->ref_rfile)
@@ -229,6 +229,7 @@ int main(int argc, char *argv[])
     bool do_psnr = false;
     bool do_ssim = false;
     bool do_ms_ssim = false;
+    bool do_deitp = false;
     char *pool_method = NULL;
     int n_thread = 0;
     int n_subsample = 1;
@@ -357,6 +358,11 @@ int main(int argc, char *argv[])
         do_ms_ssim = true;
     }
 
+    if (cmdOptionExists(argv +7, argv + argc, "--deitp"))
+    {
+        do_deitp = true;
+    }
+
     pool_method = getCmdOption(argv + 7, argv + argc, "--pool");
     if (pool_method != NULL && !(strcmp(pool_method, "min")==0 || strcmp(pool_method, "harmonic_mean")==0 || strcmp(pool_method, "mean")==0))
     {
@@ -377,13 +383,13 @@ int main(int argc, char *argv[])
 			getMemory(itr_ctr,1);
 			ret = run_wrapper(fmt, width, height, ref_path, dis_path, model_path,
                 log_path, log_fmt, disable_clip, disable_avx, enable_transform, phone_model,
-                do_psnr, do_ssim, do_ms_ssim, pool_method, n_thread, n_subsample, enable_conf_interval);
+                do_psnr, do_ssim, do_ms_ssim, do_deitp, pool_method, n_thread, n_subsample, enable_conf_interval);
 			getMemory(itr_ctr,2);
 		}
 #else
         return run_wrapper(fmt, width, height, ref_path, dis_path, model_path,
                 log_path, log_fmt, disable_clip, disable_avx, enable_transform, phone_model,
-                do_psnr, do_ssim, do_ms_ssim, pool_method, n_thread, n_subsample, enable_conf_interval);
+                do_psnr, do_ssim, do_ms_ssim, do_deitp, pool_method, n_thread, n_subsample, enable_conf_interval);
 #endif
     }
     catch (const std::exception &e)

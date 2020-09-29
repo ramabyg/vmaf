@@ -37,6 +37,11 @@
 #include "psnr_tools.h"
 #include "offset.h"
 
+#include "KdeType.h"
+#include "CdeType.h"
+#include "DeApi.h"
+#include "CdeUtil.h"
+
 #include "common/blur_array.h"
 #include "cpu_info.h"
 
@@ -54,6 +59,39 @@ int compute_ssim(const float *ref, const float *cmp, int w, int h, int ref_strid
 int compute_ms_ssim(const float *ref, const float *cmp, int w, int h, int ref_stride, int cmp_stride, double *score, double* l_scores, double* c_scores, double* s_scores);
 
 #define MIN(x, y) (((x) < (y)) ? (x) : (y))
+
+
+/* Below is updated even in read_frame.c file we need to have common place holder*/
+#define Tap_6_FilterUvRowUsHalfSize    3
+static const FloatComp_t Tap_6_FilterUvRowUs0_m[Tap_6_FilterUvRowUsHalfSize<<1] = {
+  (FloatComp_t)(2/256.0), -(FloatComp_t)(12/256.0), (FloatComp_t)(65/256.0),
+  (FloatComp_t)(222/256.0), -(FloatComp_t)(25/256.0), (FloatComp_t)(4/256.0)
+};
+
+static const FloatComp_t Tap_6_FilterUvRowUs1_m[Tap_6_FilterUvRowUsHalfSize<<1] = {
+  (FloatComp_t)(4/256.0), -(FloatComp_t)(25/256.0), (FloatComp_t)(222/256.0),
+  (FloatComp_t)(65/256.0), -(FloatComp_t)(12/256.0), (FloatComp_t)(2/256.0)
+};
+
+#define FilterUvColUsHalfSize    4
+static const FloatComp_t FilterUvColUs_m[FilterUvColUsHalfSize<<1] = {
+  (FloatComp_t)(22/4096.0), (FloatComp_t)(94/4096.0), -(FloatComp_t)(524/4096.0), (FloatComp_t)(2456/4096.0),
+  (FloatComp_t)(2456/4096.0), -(FloatComp_t)(524/4096.0), (FloatComp_t)(94/4096.0), (FloatComp_t)(22/4096.0)
+};
+
+#define CHRM_C2K(c) (  ((c) == CChrm420) ? KChrm420 :          \
+                       ((c) == CChrm422) ? KChrm422 :  KChrm444 )
+
+#define DTP_C2K(c) (  ((c) == CDtpU16) ? KDtpU16 :          \
+                     ((c) == CDtpU8)  ? KDtpU8  :  KDtpF32 )
+
+#define WEAV_C2K(c) (  ((c) == CWeavPlnr) ? KWeavPlnr :            \
+                      ((c) == CWeavIntl) ? KWeavIntl :  KWeavUyVy )
+
+#define EOTF_C2K(c) (  ((c) == CEotfBt1886) ?  KEotfBt1886 :              \
+                      ((c) == CEotfPq)     ?  KEotfPq     : KEotfPower  )
+
+#define LOC_C2K(c)  (  ((c) == CLocHost) ?  KLocHost : KLocDev  )
 
 void* combo_threadfunc(void* vmaf_thread_data)
 {
@@ -93,6 +131,18 @@ void* combo_threadfunc(void* vmaf_thread_data)
     float *next_blur_buf = 0;
     float *temp_buf = 0;
 
+    /* buffer pointers for color channels*/
+    float *ref_buf_no_conv = 0;
+    float *next_ref_buf_no_conv = 0;
+    float *ref_buf_cb = 0;
+    float *ref_buf_cr = 0;
+    float *dis_buf_cb = 0;
+    float *dis_buf_cr = 0;
+    float *next_ref_buf_cb = 0;
+    float *next_ref_buf_cr = 0;
+    float *next_dis_buf_cb = 0;
+    float *next_dis_buf_cr = 0;
+
     int ret = 0;
     bool next_frame_read;
 
@@ -118,8 +168,8 @@ void* combo_threadfunc(void* vmaf_thread_data)
             pthread_mutex_unlock(&thread_data->mutex_readframe);
             goto fail_or_end;
         }
-
         // the next frame
+
         frm_idx = thread_data->frm_idx;
         thread_data->frm_idx++;
 
@@ -129,7 +179,7 @@ void* combo_threadfunc(void* vmaf_thread_data)
             blur_buf    = get_free_blur_buf_slot(&thread_data->blur_buf_array, frm_idx);
             ref_buf     = get_free_blur_buf_slot(&thread_data->ref_buf_array, frm_idx);
             dis_buf     = get_free_blur_buf_slot(&thread_data->dis_buf_array, frm_idx);
-		
+
             if((NULL == blur_buf) || (NULL == ref_buf) || (NULL == dis_buf))
             {
                 thread_data->stop_threads = 1;
@@ -138,9 +188,41 @@ void* combo_threadfunc(void* vmaf_thread_data)
                 goto fail_or_end;
             }
 
-            // read frame from file
+            /* Get extra buffers when DEITP or DESITP is enabled */
+            if (thread_data->dlb_mean_deitp_array != NULL)
+            {
+                ref_buf_no_conv = get_free_blur_buf_slot(&thread_data->ref_buf_no_conv_array, frm_idx);
+                ref_buf_cb = get_free_blur_buf_slot(&thread_data->ref_buf_cb_array, frm_idx);
+                ref_buf_cr = get_free_blur_buf_slot(&thread_data->ref_buf_cr_array, frm_idx);
+                dis_buf_cb = get_free_blur_buf_slot(&thread_data->dis_buf_cb_array, frm_idx);
+                dis_buf_cr = get_free_blur_buf_slot(&thread_data->dis_buf_cr_array, frm_idx);
 
-            ret = thread_data->read_frame(ref_buf, dis_buf, temp_buf, stride, user_data);
+                if ((ref_buf_cb == NULL) || (ref_buf_cr == NULL) || (dis_buf_cb == NULL) || (ref_buf_cb == NULL) || (ref_buf_no_conv == NULL))
+                {
+                    thread_data->stop_threads = 1;
+                    sprintf(errmsg, "No free slot found for buffer allocation.\n");
+                    pthread_mutex_unlock(&thread_data->mutex_readframe);
+                    goto fail_or_end;
+                }
+            }
+
+                // read frame from file
+            if (thread_data->dlb_mean_deitp_array != NULL)
+            {
+                // read frame from file and convert to 444
+              //  ret = thread_data->read_frame_cb_cr(ref_buf, dis_buf, ref_buf_cb, dis_buf_cb,
+                //                                    ref_buf_cr, dis_buf_cr, stride, user_data);
+                ret = thread_data->read_frame_cb_cr(ref_buf, dis_buf, ref_buf_cb, dis_buf_cb,
+                                                    ref_buf_cr, dis_buf_cr, temp_buf, stride, user_data);
+                //copy entire ref buf to extra buffer for deitp
+                int size = h * stride;
+                memcpy(ref_buf_no_conv,ref_buf,size);
+            }
+            else
+            {
+                ret = thread_data->read_frame(ref_buf, dis_buf, temp_buf, stride, user_data);
+            }
+
             if (ret == 1)
             {
                 thread_data->stop_threads = 1;
@@ -183,6 +265,22 @@ void* combo_threadfunc(void* vmaf_thread_data)
                 pthread_mutex_unlock(&thread_data->mutex_readframe);
                 goto fail_or_end;
             }
+
+            if (thread_data->dlb_mean_deitp_array != NULL)
+            {
+                ref_buf_no_conv = get_blur_buf(&thread_data->ref_buf_no_conv_array, frm_idx);
+                ref_buf_cb = get_blur_buf(&thread_data->ref_buf_cb_array, frm_idx);
+                ref_buf_cr = get_blur_buf(&thread_data->ref_buf_cr_array, frm_idx);
+                dis_buf_cb = get_blur_buf(&thread_data->dis_buf_cb_array, frm_idx);
+                dis_buf_cr = get_blur_buf(&thread_data->dis_buf_cr_array, frm_idx);
+
+                if ((ref_buf_cb == NULL) || (ref_buf_cr == NULL) || (dis_buf_cb == NULL) || (ref_buf_cb == NULL) || (ref_buf_no_conv == NULL)) {
+                    thread_data->stop_threads = 1;
+                    sprintf(errmsg, "Data not available.\n");
+                    pthread_mutex_unlock(&thread_data->mutex_readframe);
+                    goto fail_or_end;
+                }
+            }
         }
 
         // Allocate free buffer from the buffer array for next frame index
@@ -196,7 +294,35 @@ void* combo_threadfunc(void* vmaf_thread_data)
             goto fail_or_end;
         }
 
-        ret = thread_data->read_frame(next_ref_buf, next_dis_buf, temp_buf, stride, user_data);
+        if (thread_data->dlb_mean_deitp_array != NULL)
+        {
+            next_ref_buf_no_conv = get_free_blur_buf_slot(&thread_data->ref_buf_no_conv_array, frm_idx + 1);
+            next_ref_buf_cb = get_free_blur_buf_slot(&thread_data->ref_buf_cb_array, frm_idx + 1);
+            next_ref_buf_cr = get_free_blur_buf_slot(&thread_data->ref_buf_cr_array, frm_idx + 1);
+            next_dis_buf_cb = get_free_blur_buf_slot(&thread_data->dis_buf_cb_array, frm_idx + 1);
+            next_dis_buf_cr = get_free_blur_buf_slot(&thread_data->dis_buf_cr_array, frm_idx + 1);
+
+            if ((NULL == next_ref_buf_cb) || (NULL == next_ref_buf_cr) || (NULL == next_dis_buf_cb) || (NULL == next_dis_buf_cr) || (next_ref_buf_no_conv == NULL))
+            {
+                thread_data->stop_threads = 1;
+                sprintf(errmsg, "No free slot found for next buffer.\n");
+                pthread_mutex_unlock(&thread_data->mutex_readframe);
+                goto fail_or_end;
+            }
+        }
+        if (thread_data->dlb_mean_deitp_array != NULL)
+        {
+            // read frame from file and convert to 444
+            ret = thread_data->read_frame_cb_cr(next_ref_buf, next_dis_buf, next_ref_buf_cb, next_dis_buf_cb,
+                                                next_ref_buf_cr, next_dis_buf_cr, temp_buf, stride, user_data);
+            //copy entire ref buf to extra buffer for deitp
+            int size = h * stride;
+            memcpy(next_ref_buf_no_conv, next_ref_buf, size);
+        }
+        else
+        {
+            ret = thread_data->read_frame(next_ref_buf, next_dis_buf, temp_buf, stride, user_data);
+        }
         if (ret == 1)
         {
             thread_data->stop_threads = 1;
@@ -241,9 +367,19 @@ void* combo_threadfunc(void* vmaf_thread_data)
         // release ref and dis buffer references after blur buf computation
         release_blur_buf_reference(&thread_data->ref_buf_array, frm_idx + 1);
         release_blur_buf_reference(&thread_data->dis_buf_array, frm_idx + 1);
+
+        if (thread_data->dlb_mean_deitp_array != NULL)
+        {
+            release_blur_buf_reference(&thread_data->ref_buf_no_conv_array, frm_idx + 1);
+            release_blur_buf_reference(&thread_data->ref_buf_cb_array, frm_idx + 1);
+            release_blur_buf_reference(&thread_data->dis_buf_cb_array, frm_idx + 1);
+            release_blur_buf_reference(&thread_data->ref_buf_cr_array, frm_idx + 1);
+            release_blur_buf_reference(&thread_data->dis_buf_cr_array, frm_idx + 1);
+        }
+
         pthread_mutex_unlock(&thread_data->mutex_readframe);
 
-        dbg_printf("frame: %d, ", frm_idx);
+        dbg_printf("frame: %d, \n", frm_idx);
 
         // ===============================================================
         // for the PSNR, SSIM and MS-SSIM, offset are 0. Since in prev read
@@ -482,12 +618,163 @@ void* combo_threadfunc(void* vmaf_thread_data)
             insert_array_at(thread_data->vif_array, score, frm_idx);
         }
 
+        /* Dolby Feature extractors */
+        /*======================DEITF==================*/
+        if ((frm_idx % n_subsample == 0) && (thread_data->dlb_mean_deitp_array != NULL))
+        {
+            DmKsFlt_t dEITPParams;
+            HDeKsFlt_t hKs = &dEITPParams;
+            unsigned char *frmBuf0s[2];
+            unsigned char *frmBuf1s[2];
+            unsigned char *frmBuf2s[2];
+            /* Glu logic to use DEITF, eventually we need to change below code
+           and use vmaf code
+           */
+            dEITPParams.rowPitchNum = w;
+            dEITPParams.frmBuf0[0] = (FloatComp_t *)ref_buf_no_conv;
+            dEITPParams.frmBuf1[0] = (FloatComp_t *)ref_buf_cb;
+            dEITPParams.frmBuf2[0] = (FloatComp_t *)ref_buf_cr;
+            dEITPParams.frmBuf0[1] = (FloatComp_t *)dis_buf;
+            dEITPParams.frmBuf1[1] = (FloatComp_t *)dis_buf_cb;
+            dEITPParams.frmBuf2[1] = (FloatComp_t *)dis_buf_cr;
+
+           // dEITPParams.frmBufDe[0] =
+           // dEITPParams.frmBufDe[1] =
+
+            dEITPParams.ksUds[0].chrm = CHRM_C2K(CChrm420); //at present only YUV 420
+            dEITPParams.ksUds[0].minUs = 0;
+            dEITPParams.ksUds[0].maxUs = (FloatComp_t)((1 << 8) - 1);
+            dEITPParams.ksUds[0].filterUvRowUsHalfSize = Tap_6_FilterUvRowUsHalfSize;
+            dEITPParams.ksUds[0].filterUvRowUs0 = (FloatComp_t *)Tap_6_FilterUvRowUs0_m;
+            dEITPParams.ksUds[0].filterUvRowUs1 = (FloatComp_t *)Tap_6_FilterUvRowUs1_m;
+            dEITPParams.ksUds[0].filterUvColUsHalfSize = FilterUvColUsHalfSize;
+            dEITPParams.ksUds[0].filterUvColUs = (FloatComp_t *)FilterUvColUs_m;
+            dEITPParams.ksUds[1].chrm = CHRM_C2K(CChrm420); //at present only YUV 420
+            dEITPParams.ksUds[1].minUs = 0;
+            dEITPParams.ksUds[1].maxUs = (FloatComp_t)((1 << 8) - 1);
+            dEITPParams.ksUds[1].filterUvRowUsHalfSize = Tap_6_FilterUvRowUsHalfSize;
+            dEITPParams.ksUds[1].filterUvRowUs0 = (FloatComp_t *)Tap_6_FilterUvRowUs0_m;
+            dEITPParams.ksUds[1].filterUvRowUs1 = (FloatComp_t *)Tap_6_FilterUvRowUs1_m;
+            dEITPParams.ksUds[1].filterUvColUsHalfSize = FilterUvColUsHalfSize;
+            dEITPParams.ksUds[1].filterUvColUs = (FloatComp_t *)FilterUvColUs_m;
+
+            dEITPParams.ksFrmFmt[0].rowNum = h;
+            dEITPParams.ksFrmFmt[0].colNum = w;
+            dEITPParams.ksFrmFmt[0].dtp = DTP_C2K(CDtpU8);
+            dEITPParams.ksFrmFmt[0].weav = WEAV_C2K(CWeavPlnr);
+            dEITPParams.ksFrmFmt[0].loc = LOC_C2K(CLocHost);
+            dEITPParams.ksFrmFmt[0].rowPitch = w;
+            dEITPParams.ksFrmFmt[0].colPitch = GET_PXL_COL_PITCH(CClrYuv, CChrm420, CWeavPlnr, CDtpU8);;
+            dEITPParams.ksFrmFmt[0].rowPitchC = w>>1;
+
+            dEITPParams.ksFrmFmt[1].rowNum = h;
+            dEITPParams.ksFrmFmt[1].colNum = w;
+            dEITPParams.ksFrmFmt[1].dtp = DTP_C2K(CDtpU8);
+            dEITPParams.ksFrmFmt[1].weav = WEAV_C2K(CWeavPlnr);
+            dEITPParams.ksFrmFmt[1].loc = LOC_C2K(CLocHost);
+            dEITPParams.ksFrmFmt[1].rowPitch = w;
+            dEITPParams.ksFrmFmt[1].colPitch = GET_PXL_COL_PITCH(CClrYuv, CChrm420, CWeavPlnr, CDtpU8);;
+            dEITPParams.ksFrmFmt[1].rowPitchC = w>>1;
+
+            dEITPParams.ksIMap[0].eotfParam.min = 0.0050000000000000001;
+            dEITPParams.ksIMap[0].eotfParam.max = 100;
+            dEITPParams.ksIMap[0].eotfParam.rangeMin = 0;
+            FloatComp_t range = ((1<< 8) - 1);
+            dEITPParams.ksIMap[0].eotfParam.rangeR = 1/range;
+            dEITPParams.ksIMap[0].eotfParam.eotf = EOTF_C2K(CEotfBt1886);
+            dEITPParams.ksIMap[0].eotfParam.a = 96.17006396051292;
+            dEITPParams.ksIMap[0].eotfParam.b = 0.016404797534949767;
+            dEITPParams.ksIMap[0].eotfParam.gamma = 2.3999999999999999;
+
+            dEITPParams.ksIMap[1].eotfParam.min = 0.0050000000000000001;
+            dEITPParams.ksIMap[1].eotfParam.max = 100;
+            dEITPParams.ksIMap[1].eotfParam.rangeMin = 0;
+            dEITPParams.ksIMap[1].eotfParam.rangeR = 1/range;
+            dEITPParams.ksIMap[1].eotfParam.eotf = EOTF_C2K(CEotfBt1886);
+            dEITPParams.ksIMap[1].eotfParam.a = 96.17006396051292;
+            dEITPParams.ksIMap[1].eotfParam.b = 0.016404797534949767;
+            dEITPParams.ksIMap[1].eotfParam.gamma = 2.3999999999999999;
+
+            /* Q&D: since these two are constant, just assign it
+     * XYZ2RGB = Dolby_getmatrix('xyz2r2020');
+     * RGB2LMS = [1688,2146,262; 683,2951,462; 99,309,3688]'./4096;
+     * xyz2lms = XYZ2RGB*RGB2LMS;
+     * xyz2lms' =
+    */
+            dEITPParams.m33Xyz2LmsViaR2020[0][0] = 0.359283259012122;
+            dEITPParams.m33Xyz2LmsViaR2020[0][1] = 0.697605114777950;
+            dEITPParams.m33Xyz2LmsViaR2020[0][2] = -0.035891593232029;
+
+            dEITPParams.m33Xyz2LmsViaR2020[1][0] = -0.192080846370499;
+            dEITPParams.m33Xyz2LmsViaR2020[1][1] = 1.100476797037432;
+            dEITPParams.m33Xyz2LmsViaR2020[1][2] = 0.075374865851912;
+
+            dEITPParams.m33Xyz2LmsViaR2020[2][0] = 0.007079784460748;
+            dEITPParams.m33Xyz2LmsViaR2020[2][1] = 0.074839666218637;
+            dEITPParams.m33Xyz2LmsViaR2020[2][2] = 0.843326545389877;
+
+            /*
+    * lms2IctcpDm' = [2048,2048,0; 6610,-13613,7003; 17933,-17390,-543]'./4096*diag([1,0.5,1]);
+    */
+            dEITPParams.m33Lms2IctcpDm[0][0] = 0.500000000000000;
+            dEITPParams.m33Lms2IctcpDm[0][1] = 0.500000000000000;
+            dEITPParams.m33Lms2IctcpDm[0][2] = 0;
+
+            dEITPParams.m33Lms2IctcpDm[1][0] = 0.806884765625000;
+            dEITPParams.m33Lms2IctcpDm[1][1] = -1.661743164062500;
+            dEITPParams.m33Lms2IctcpDm[1][2] = 0.854858398437500;
+
+            dEITPParams.m33Lms2IctcpDm[2][0] = 4.378173828125000;
+            dEITPParams.m33Lms2IctcpDm[2][1] = -4.245605468750000;
+            dEITPParams.m33Lms2IctcpDm[2][2] = -0.132568359375000;
+
+
+            double m33Rgb2Lms[3][3];
+            GetRgb2LmsByDefM33(CRgbDefR709,m33Rgb2Lms);
+            GetRgb2XyzFrom2LmsM33Fc((const double(*)[3])m33Rgb2Lms, &dEITPParams.ksIMap[0].m33Rgb2Xyz);
+            GetRgb2XyzFrom2LmsM33Fc((const double(*)[3])m33Rgb2Lms, &dEITPParams.ksIMap[1].m33Rgb2Xyz);
+
+            GetYuv2RgbM33Fc(CYuvXferSpecR709, &dEITPParams.ksIMap[0].m33Yuv2Rgb);
+            GetYuv2RgbM33Fc(CYuvXferSpecR709, &dEITPParams.ksIMap[1].m33Yuv2Rgb);
+            GetYuvRgbOffFc(CRngFull, 8, &dEITPParams.ksIMap[0].v3Yuv2RgbOff);
+            GetYuvRgbOffFc(CRngFull, 8, &dEITPParams.ksIMap[1].v3Yuv2RgbOff);
+
+
+
+            dEITPParams.pxlNumR = w * h;
+            dEITPParams.pxlNumR = w * h;
+            dEITPParams.pxlNumR = 1 / dEITPParams.pxlNumR;
+
+            float meanDe[2];
+            float maxDe[2];
+            float sdDe[2];
+
+                //offset_image(ref_buf, -OPT_RANGE_PIXEL_OFFSET, w, h, stride);
+                offset_image(dis_buf, -OPT_RANGE_PIXEL_OFFSET, w, h, stride);
+
+                ret = DolbyDe(hKs, meanDe, maxDe, sdDe, ref_buf, temp_buf);
+                insert_array_at(thread_data->dlb_mean_deitp_array, meanDe[0], frm_idx);
+                insert_array_at(thread_data->dlb_max_deitp_array, maxDe[0], frm_idx);
+                insert_array_at(thread_data->dlb_sd_deitp_array, sdDe[0], frm_idx);
+
+                printf("%11s %5.03f %5.03f\n", "MeanDe and MaxDe are: ", meanDe[0], maxDe[0]);
+        }
+
         dbg_printf("\n");
 
         //Release references to reference and distorted buffers
         release_blur_buf_reference(&thread_data->ref_buf_array, frm_idx);
         release_blur_buf_reference(&thread_data->dis_buf_array, frm_idx);
         release_blur_buf_reference(&thread_data->blur_buf_array, frm_idx);
+
+        if (thread_data->dlb_mean_deitp_array != NULL)
+        {
+            release_blur_buf_reference(&thread_data->ref_buf_no_conv_array, frm_idx);
+            release_blur_buf_reference(&thread_data->ref_buf_cb_array, frm_idx);
+            release_blur_buf_reference(&thread_data->dis_buf_cb_array, frm_idx);
+            release_blur_buf_reference(&thread_data->ref_buf_cr_array, frm_idx);
+            release_blur_buf_reference(&thread_data->dis_buf_cr_array, frm_idx);
+        }
         /*Loop through the slots and release slots if there are no more
           reference till the current index. Not releasing next frame as
           it may be required for the next loop						   */
@@ -496,10 +783,34 @@ void* combo_threadfunc(void* vmaf_thread_data)
             int ref_reference_count = get_blur_buf_reference_count(&thread_data->ref_buf_array, i);
             int dis_reference_count = get_blur_buf_reference_count(&thread_data->dis_buf_array, i);
 
-            if((ref_reference_count == 0) && (dis_reference_count == 0))
+            if ((ref_reference_count == 0) && (dis_reference_count == 0))
             {
                 release_blur_buf_slot(&thread_data->ref_buf_array, i);
                 release_blur_buf_slot(&thread_data->dis_buf_array, i);
+            }
+
+            if (thread_data->dlb_mean_deitp_array != NULL)
+            {
+
+                int ref_buf_no_conv_reference_count =
+                    get_blur_buf_reference_count(&thread_data->ref_buf_no_conv_array, i);
+                int ref_cb_reference_count = get_blur_buf_reference_count(&thread_data->ref_buf_cb_array, i);
+                int dis_cb_reference_count = get_blur_buf_reference_count(&thread_data->dis_buf_cb_array, i);
+
+                int ref_cr_reference_count = get_blur_buf_reference_count(&thread_data->ref_buf_cr_array, i);
+                int dis_cr_reference_count = get_blur_buf_reference_count(&thread_data->dis_buf_cr_array, i);
+
+                if ((ref_cb_reference_count == 0) && (dis_cb_reference_count == 0) &&
+                    (ref_cr_reference_count == 0) && (dis_cr_reference_count == 0) &&
+                    (ref_buf_no_conv_reference_count == 0))
+                {
+                    release_blur_buf_slot(&thread_data->ref_buf_no_conv_array,i);
+                    release_blur_buf_slot(&thread_data->ref_buf_cb_array, i);
+                    release_blur_buf_slot(&thread_data->dis_buf_cb_array, i);
+
+                    release_blur_buf_slot(&thread_data->ref_buf_cr_array, i);
+                    release_blur_buf_slot(&thread_data->dis_buf_cr_array, i);
+                }
             }
         }
 
@@ -528,6 +839,15 @@ void* combo_threadfunc(void* vmaf_thread_data)
             release_blur_buf_slot(&thread_data->ref_buf_array, frm_idx + 1);
             release_blur_buf_slot(&thread_data->dis_buf_array, frm_idx + 1);
             release_blur_buf_slot(&thread_data->blur_buf_array, frm_idx);
+
+            if (thread_data->dlb_mean_deitp_array != NULL)
+            {
+                release_blur_buf_slot(&thread_data->ref_buf_no_conv_array,frm_idx + 1);
+                release_blur_buf_slot(&thread_data->ref_buf_cb_array, frm_idx + 1);
+                release_blur_buf_slot(&thread_data->dis_buf_cb_array, frm_idx + 1);
+                release_blur_buf_slot(&thread_data->ref_buf_cr_array, frm_idx + 1);
+                release_blur_buf_slot(&thread_data->dis_buf_cr_array, frm_idx + 1);
+            }
         }
 
         if (!next_frame_read)
@@ -549,39 +869,44 @@ fail_or_end:
 
 }
 
-int combo(int (*read_frame)(float *ref_data, float *main_data, float *temp_data, int stride, void *user_data), void *user_data, int w, int h, const char *fmt,
-        DArray *adm_num_array,
-        DArray *adm_den_array,
-        DArray *adm_num_scale0_array,
-        DArray *adm_den_scale0_array,
-        DArray *adm_num_scale1_array,
-        DArray *adm_den_scale1_array,
-        DArray *adm_num_scale2_array,
-        DArray *adm_den_scale2_array,
-        DArray *adm_num_scale3_array,
-        DArray *adm_den_scale3_array,
-        DArray *motion_array,
-        DArray *motion2_array,
-        DArray *vif_num_scale0_array,
-        DArray *vif_den_scale0_array,
-        DArray *vif_num_scale1_array,
-        DArray *vif_den_scale1_array,
-        DArray *vif_num_scale2_array,
-        DArray *vif_den_scale2_array,
-        DArray *vif_num_scale3_array,
-        DArray *vif_den_scale3_array,
-        DArray *vif_array,
-        DArray *psnr_array,
-        DArray *ssim_array,
-        DArray *ms_ssim_array,
-        char *errmsg,
-        int n_thread,
-        int n_subsample
-        )
+int combo(int (*read_frame)(float *ref_data, float *main_data, float *temp_data, int stride, void *user_data),
+          int (*read_frame_cb_cr)(float *ref_data, float *main_data, float *ref_data_cb, float *main_data_cb, float *ref_data_cr, float *main_data_cr, float *temp_data, int stride, void *user_data),
+          void *user_data, int w, int h, const char *fmt,
+          DArray *adm_num_array,
+          DArray *adm_den_array,
+          DArray *adm_num_scale0_array,
+          DArray *adm_den_scale0_array,
+          DArray *adm_num_scale1_array,
+          DArray *adm_den_scale1_array,
+          DArray *adm_num_scale2_array,
+          DArray *adm_den_scale2_array,
+          DArray *adm_num_scale3_array,
+          DArray *adm_den_scale3_array,
+          DArray *motion_array,
+          DArray *motion2_array,
+          DArray *vif_num_scale0_array,
+          DArray *vif_den_scale0_array,
+          DArray *vif_num_scale1_array,
+          DArray *vif_den_scale1_array,
+          DArray *vif_num_scale2_array,
+          DArray *vif_den_scale2_array,
+          DArray *vif_num_scale3_array,
+          DArray *vif_den_scale3_array,
+          DArray *vif_array,
+          DArray *psnr_array,
+          DArray *ssim_array,
+          DArray *ms_ssim_array,
+          DArray *dlb_mean_deitp_array,
+          DArray *dlb_max_deitp_array,
+          DArray *dlb_sd_deitp_array,
+          char *errmsg,
+          int n_thread,
+          int n_subsample)
 {
     // init shared thread data
     VMAF_THREAD_STRUCT combo_thread_data;
     combo_thread_data.read_frame = read_frame;
+    combo_thread_data.read_frame_cb_cr = read_frame_cb_cr;
     combo_thread_data.user_data = user_data;
     combo_thread_data.w = w;
     combo_thread_data.h = h;
@@ -610,6 +935,11 @@ int combo(int (*read_frame)(float *ref_data, float *main_data, float *temp_data,
     combo_thread_data.psnr_array = psnr_array;
     combo_thread_data.ssim_array = ssim_array;
     combo_thread_data.ms_ssim_array = ms_ssim_array;
+
+    combo_thread_data.dlb_mean_deitp_array = dlb_mean_deitp_array;
+    combo_thread_data.dlb_max_deitp_array = dlb_max_deitp_array;
+    combo_thread_data.dlb_sd_deitp_array = dlb_sd_deitp_array;
+
     combo_thread_data.errmsg = errmsg;
     combo_thread_data.frm_idx = 0;
     combo_thread_data.stop_threads = 0;
@@ -663,8 +993,22 @@ int combo(int (*read_frame)(float *ref_data, float *main_data, float *temp_data,
     init_blur_array(&combo_thread_data.dis_buf_array, MIN(combo_thread_data.thread_count + 1, MAX_NUM_THREADS), combo_thread_data.data_sz, MAX_ALIGN);
     init_blur_array(&combo_thread_data.blur_buf_array, MIN(3 * (combo_thread_data.thread_count), MAX_NUM_THREADS), combo_thread_data.data_sz, MAX_ALIGN);
 
-    // initialize the mutex that protects the read_frame function
-    pthread_mutex_init(&combo_thread_data.mutex_readframe, NULL);
+    /*
+     * For DEITP and DEISTP calculations, we need to process color buffers too
+     * So create buffers reference and distorted color buffers
+     * Size of the buffer is same as Luma, as while reading the frame we also to upsampling/coversion to YUV 444
+     * Create one extra reference buffer as DEITP does no need convoluted frame. But VMAF seems to do convolution to it.
+     * */
+    if (dlb_mean_deitp_array != NULL)
+    {
+        init_blur_array(&combo_thread_data.ref_buf_no_conv_array, MIN(combo_thread_data.thread_count + 1, MAX_NUM_THREADS), combo_thread_data.data_sz, MAX_ALIGN);
+        init_blur_array(&combo_thread_data.ref_buf_cb_array, MIN(combo_thread_data.thread_count + 1, MAX_NUM_THREADS), combo_thread_data.data_sz, MAX_ALIGN);
+        init_blur_array(&combo_thread_data.dis_buf_cb_array, MIN(combo_thread_data.thread_count + 1, MAX_NUM_THREADS), combo_thread_data.data_sz, MAX_ALIGN);
+        init_blur_array(&combo_thread_data.ref_buf_cr_array, MIN(combo_thread_data.thread_count + 1, MAX_NUM_THREADS), combo_thread_data.data_sz, MAX_ALIGN);
+        init_blur_array(&combo_thread_data.dis_buf_cr_array, MIN(combo_thread_data.thread_count + 1, MAX_NUM_THREADS), combo_thread_data.data_sz, MAX_ALIGN);
+    }
+        // initialize the mutex that protects the read_frame function
+        pthread_mutex_init(&combo_thread_data.mutex_readframe, NULL);
 
     // create a joinable thread
     pthread_attr_t attr;
@@ -701,6 +1045,15 @@ int combo(int (*read_frame)(float *ref_data, float *main_data, float *temp_data,
     free_blur_buf(&combo_thread_data.dis_buf_array);
     free_blur_buf(&combo_thread_data.blur_buf_array);
 
+    /* If the color buffers if we have created them */
+    if (dlb_mean_deitp_array != NULL)
+    {
+        free_blur_buf(&combo_thread_data.ref_buf_no_conv_array);
+        free_blur_buf(&combo_thread_data.ref_buf_cb_array);
+        free_blur_buf(&combo_thread_data.dis_buf_cb_array);
+        free_blur_buf(&combo_thread_data.ref_buf_cr_array);
+        free_blur_buf(&combo_thread_data.dis_buf_cr_array);
+    }
     free_array(&motion_score_compute_flag_array);
 
     free(thread);

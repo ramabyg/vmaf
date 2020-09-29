@@ -22,35 +22,35 @@
 #include "vmaf.h"
 
 Asset::Asset(int w, int h, const char *fmt)
-    :w(w), h(h), fmt(fmt) 
+    :w(w), h(h), fmt(fmt)
 {
 }
 
-Asset::Asset(int w, int h) 
-    :w(w), h(h), fmt("yuv420p") 
+Asset::Asset(int w, int h)
+    :w(w), h(h), fmt("yuv420p")
 {
 }
 
 int Asset::getWidth()
-{ 
-    return w; 
+{
+    return w;
 }
 
 int Asset::getHeight()
-{ 
-    return h; 
+{
+    return h;
 }
 
 const char* Asset::getFmt()
-{ 
-    return fmt; 
+{
+    return fmt;
 }
 
-StatVector::StatVector() 
+StatVector::StatVector()
 {
 }
 
-StatVector::StatVector(std::vector<double> l) : l(l) 
+StatVector::StatVector(std::vector<double> l) : l(l)
 {
 }
 
@@ -130,27 +130,27 @@ double StatVector::percentile(double perc)
 }
 
 double StatVector::var()
-{ 
-    return second_moment() - pow(mean(), 2); 
+{
+    return second_moment() - pow(mean(), 2);
 }
 
 double StatVector::std()
-{ 
-    return sqrt(var()); 
+{
+    return sqrt(var());
 }
 
 void StatVector::append(double e)
-{ 
-    l.push_back(e); 
+{
+    l.push_back(e);
 }
 double StatVector::at(size_t idx)
-{ 
-    return l.at(idx); 
+{
+    return l.at(idx);
 }
 
 size_t StatVector::size()
-{ 
-    return l.size(); 
+{
+    return l.size();
 }
 
 void StatVector::_assert_size()
@@ -166,17 +166,17 @@ Result::Result() : score_aggregate_method(ScoreAggregateMethod::MEAN)
 
 void Result::set_scores(const std::string &key, const StatVector &scores)
 {
-    d[key] = scores; 
+    d[key] = scores;
 }
 
 StatVector Result::get_scores(const std::string &key)
-{ 
-    return d[key]; 
+{
+    return d[key];
 }
 
 bool Result::has_scores(const std::string &key)
 {
-    return d.find(key) != d.end(); 
+    return d.find(key) != d.end();
 }
 
 double Result::get_score(const std::string &key)
@@ -211,7 +211,7 @@ void Result::setScoreAggregateMethod(ScoreAggregateMethod scoreAggregateMethod)
     score_aggregate_method = scoreAggregateMethod;
 }
 
-std::unique_ptr<IVmafQualityRunner> 
+std::unique_ptr<IVmafQualityRunner>
 VmafQualityRunnerFactory::createVmafQualityRunner(const char *model_path, bool enable_conf_interval) {
     std::unique_ptr<IVmafQualityRunner> runner_ptr;
     if (enable_conf_interval)
@@ -226,16 +226,35 @@ VmafQualityRunnerFactory::createVmafQualityRunner(const char *model_path, bool e
 }
 
 extern "C" {
-
-    int compute_vmaf(double* vmaf_score, char* fmt, int width, int height, int(*read_frame)(float *ref_data, float *main_data, float *temp_data, int stride_byte, void *user_data),
-        void *user_data, char *model_path, char *log_path, char *log_fmt, int disable_clip, int disable_avx, int enable_transform, int phone_model, int do_psnr,
-        int do_ssim, int do_ms_ssim, char *pool_method, int n_thread, int n_subsample, int enable_conf_interval)
+    int compute_vmaf(double *vmaf_score,
+                     char *fmt,
+                     int width,
+                     int height,
+                     int (*read_frame)(float *ref_data, float *main_data, float *temp_data, int stride_byte, void *user_data),
+                     int (*read_frame_cb_cr)(float *ref_data, float *main_data, float *ref_data_cb, float *main_data_cb, float *ref_data_cr, float *main_data_cr, float *temp_data, int stride_byte, void *user_data),
+                     void *user_data,
+                     char *model_path,
+                     char *log_path,
+                     char *log_fmt,
+                     int disable_clip,
+                     int disable_avx,
+                     int enable_transform,
+                     int phone_model,
+                     int do_psnr,
+                     int do_ssim,
+                     int do_ms_ssim,
+                     int do_deitp,
+                     char *pool_method,
+                     int n_thread,
+                     int n_subsample,
+                     int enable_conf_interval)
     {
         bool d_c = false;
         bool e_t = false;
         bool d_p = false;
         bool d_s = false;
         bool d_m_s = false;
+        bool d_deitp = false;
 
         if (enable_transform || phone_model) {
             e_t = true;
@@ -252,6 +271,9 @@ extern "C" {
         if (do_ms_ssim) {
             d_m_s = true;
         }
+        if(do_deitp){
+            d_deitp = true;
+        }
 
         vmaf_init_cpu();
 
@@ -261,7 +283,7 @@ extern "C" {
 #endif
 
         try {
-            double score = RunVmaf(fmt, width, height, read_frame, user_data, model_path, log_path, log_fmt, d_c, e_t, d_p, d_s, d_m_s, pool_method, n_thread, n_subsample, enable_conf_interval);
+            double score = RunVmaf(fmt, width, height, read_frame, read_frame_cb_cr, user_data, model_path, log_path, log_fmt, d_c, e_t, d_p, d_s, d_m_s, d_deitp, pool_method, n_thread, n_subsample, enable_conf_interval);
             *vmaf_score = score;
             return 0;
         }

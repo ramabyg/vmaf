@@ -548,9 +548,11 @@ void VmafQualityRunner::_set_prediction_result(
     result.set_scores("vmaf", score);
 }
 
-Result VmafQualityRunner::run(Asset asset, int (*read_frame)(float *ref_data, float *main_data, float *temp_data,
-                       int stride, void *user_data), void *user_data, bool disable_clip, bool enable_transform,
-                       bool do_psnr, bool do_ssim, bool do_ms_ssim, int n_thread, int n_subsample)
+Result VmafQualityRunner::run(Asset asset,
+ int (*read_frame)(float *ref_data, float *main_data, float *temp_data, int stride, void *user_data),
+ int (*read_frame_cb_cr)(float *ref_data, float *main_data, float *ref_data_cb, float *main_data_cb, float *ref_data_cr, float *main_data_cr, float *temp_data, int stride, void *user_data),
+ void *user_data, bool disable_clip, bool enable_transform,
+ bool do_psnr, bool do_ssim, bool do_ms_ssim, bool do_deitp, int n_thread, int n_subsample)
 {
 
     std::unique_ptr<LibsvmNusvrTrainTestModel> model_ptr = _load_model(model_path);
@@ -562,15 +564,16 @@ Result VmafQualityRunner::run(Asset asset, int (*read_frame)(float *ref_data, fl
     const char* fmt = asset.getFmt();
     char errmsg[1024];
     DArray adm_num_array, adm_den_array, adm_num_scale0_array,
-            adm_den_scale0_array, adm_num_scale1_array, adm_den_scale1_array,
-            adm_num_scale2_array, adm_den_scale2_array, adm_num_scale3_array,
-            adm_den_scale3_array, motion_array, motion2_array,
-            vif_num_scale0_array, vif_den_scale0_array, vif_num_scale1_array,
-            vif_den_scale1_array, vif_num_scale2_array, vif_den_scale2_array,
-            vif_num_scale3_array, vif_den_scale3_array, vif_array, psnr_array,
-            ssim_array, ms_ssim_array;
+        adm_den_scale0_array, adm_num_scale1_array, adm_den_scale1_array,
+        adm_num_scale2_array, adm_den_scale2_array, adm_num_scale3_array,
+        adm_den_scale3_array, motion_array, motion2_array,
+        vif_num_scale0_array, vif_den_scale0_array, vif_num_scale1_array,
+        vif_den_scale1_array, vif_num_scale2_array, vif_den_scale2_array,
+        vif_num_scale3_array, vif_den_scale3_array, vif_array, psnr_array,
+        ssim_array, ms_ssim_array, dlb_mean_deitp_array, dlb_max_deitp_array, dlb_sd_deitp_array;
     /* use the following ptrs as flags to turn on/off optional metrics */
-    DArray *psnr_array_ptr, *ssim_array_ptr, *ms_ssim_array_ptr;
+    DArray *psnr_array_ptr, *ssim_array_ptr, *ms_ssim_array_ptr,
+                        *dlb_mean_deitp_array_ptr, *dlb_max_deitp_array_ptr, *dlb_sd_deitp_array_ptr;
     init_array(&adm_num_array, INIT_FRAMES);
     init_array(&adm_den_array, INIT_FRAMES);
     init_array(&adm_num_scale0_array, INIT_FRAMES);
@@ -595,6 +598,10 @@ Result VmafQualityRunner::run(Asset asset, int (*read_frame)(float *ref_data, fl
     init_array(&psnr_array, INIT_FRAMES);
     init_array(&ssim_array, INIT_FRAMES);
     init_array(&ms_ssim_array, INIT_FRAMES);
+    init_array(&dlb_mean_deitp_array, INIT_FRAMES);
+    init_array(&dlb_max_deitp_array, INIT_FRAMES);
+    init_array(&dlb_sd_deitp_array, INIT_FRAMES);
+
     /* optional output arrays */
     if (do_psnr) {
         psnr_array_ptr = &psnr_array;
@@ -611,16 +618,27 @@ Result VmafQualityRunner::run(Asset asset, int (*read_frame)(float *ref_data, fl
     } else {
         ms_ssim_array_ptr = NULL;
     }
+
+    if(do_deitp) {
+        dlb_mean_deitp_array_ptr = &dlb_mean_deitp_array;
+        dlb_max_deitp_array_ptr = &dlb_max_deitp_array;
+        dlb_sd_deitp_array_ptr = &dlb_sd_deitp_array;
+    } else {
+        dlb_mean_deitp_array_ptr = NULL;
+        dlb_max_deitp_array_ptr = NULL;
+        dlb_sd_deitp_array_ptr = NULL;
+    }
+
     dbg_printf("Extract atom features...\n");
-    int ret = combo(read_frame, user_data, w, h, fmt, &adm_num_array,
-            &adm_den_array, &adm_num_scale0_array, &adm_den_scale0_array,
-            &adm_num_scale1_array, &adm_den_scale1_array, &adm_num_scale2_array,
-            &adm_den_scale2_array, &adm_num_scale3_array, &adm_den_scale3_array,
-            &motion_array, &motion2_array, &vif_num_scale0_array,
-            &vif_den_scale0_array, &vif_num_scale1_array, &vif_den_scale1_array,
-            &vif_num_scale2_array, &vif_den_scale2_array, &vif_num_scale3_array,
-            &vif_den_scale3_array, &vif_array, psnr_array_ptr, ssim_array_ptr,
-            ms_ssim_array_ptr, errmsg, n_thread, n_subsample);
+    int ret = combo(read_frame, read_frame_cb_cr, user_data, w, h, fmt, &adm_num_array,
+                    &adm_den_array, &adm_num_scale0_array, &adm_den_scale0_array,
+                    &adm_num_scale1_array, &adm_den_scale1_array, &adm_num_scale2_array,
+                    &adm_den_scale2_array, &adm_num_scale3_array, &adm_den_scale3_array,
+                    &motion_array, &motion2_array, &vif_num_scale0_array,
+                    &vif_den_scale0_array, &vif_num_scale1_array, &vif_den_scale1_array,
+                    &vif_num_scale2_array, &vif_den_scale2_array, &vif_num_scale3_array,
+                    &vif_den_scale3_array, &vif_array, psnr_array_ptr, ssim_array_ptr,
+                    ms_ssim_array_ptr, dlb_mean_deitp_array_ptr, dlb_max_deitp_array_ptr, dlb_sd_deitp_array_ptr, errmsg, n_thread, n_subsample);
     if (ret) {
         throw VmafException(errmsg);
     }
@@ -657,6 +675,21 @@ Result VmafQualityRunner::run(Asset asset, int (*read_frame)(float *ref_data, fl
         num_frms_is_consistent = num_frms_is_consistent
                 && (ms_ssim_array.used == num_frms);
     }
+    if (dlb_mean_deitp_array_ptr != NULL)
+    {
+        num_frms_is_consistent = num_frms_is_consistent
+                && (dlb_mean_deitp_array.used == num_frms);
+    }
+    if (dlb_max_deitp_array_ptr != NULL)
+    {
+        num_frms_is_consistent = num_frms_is_consistent
+                && (dlb_max_deitp_array.used == num_frms);
+    }
+    if (dlb_sd_deitp_array_ptr != NULL)
+    {
+        num_frms_is_consistent = num_frms_is_consistent && (dlb_sd_deitp_array.used == num_frms);
+    }
+
     if (!num_frms_is_consistent) {
         sprintf(errmsg,
                 "Output feature vectors are of inconsistent dimensions: motion (%zu), motion2 (%zu), adm_num (%zu), adm_den (%zu), vif_num_scale0 (%zu), vif_den_scale0 (%zu), vif_num_scale1 (%zu), vif_den_scale1 (%zu), vif_num_scale2 (%zu), vif_den_scale2 (%zu), vif_num_scale3 (%zu), vif_den_scale3 (%zu), vif (%zu), psnr (%zu), ssim (%zu), ms_ssim (%zu), adm_num_scale0 (%zu), adm_den_scale0 (%zu), adm_num_scale1 (%zu), adm_den_scale1 (%zu), adm_num_scale2 (%zu), adm_den_scale2 (%zu), adm_num_scale3 (%zu), adm_den_scale3 (%zu)",
@@ -681,6 +714,8 @@ Result VmafQualityRunner::run(Asset asset, int (*read_frame)(float *ref_data, fl
             vif, motion2;
     StatVector adm_scale0, adm_scale1, adm_scale2, adm_scale3;
     StatVector psnr, ssim, ms_ssim;
+    StatVector deitp_mean, deitp_max, deitp_sd;
+
     std::vector<VmafPredictionStruct> predictionStructs;
     for (size_t i = 0; i < num_frms; i += n_subsample) {
         adm2.append(
@@ -722,6 +757,13 @@ Result VmafQualityRunner::run(Asset asset, int (*read_frame)(float *ref_data, fl
         }
         if (ms_ssim_array_ptr != NULL) {
             ms_ssim.append(get_at(&ms_ssim_array, i));
+        }
+
+        if(dlb_mean_deitp_array_ptr != NULL)
+        {
+            deitp_mean.append(get_at(&dlb_mean_deitp_array, i));
+            deitp_max.append(get_at(&dlb_max_deitp_array, i));
+            deitp_sd.append(get_at(&dlb_sd_deitp_array, i));
         }
     }
     dbg_printf(
@@ -791,6 +833,12 @@ Result VmafQualityRunner::run(Asset asset, int (*read_frame)(float *ref_data, fl
         result.set_scores("ms_ssim", ms_ssim);
     }
 
+    if (dlb_max_deitp_array_ptr != NULL) {
+        result.set_scores("deitp_mean", deitp_mean);
+        result.set_scores("deitp_max", deitp_max);
+        result.set_scores("deitp_sd", deitp_sd);
+    }
+
     _set_prediction_result(predictionStructs, result);
 
     free_array(&adm_num_array);
@@ -817,6 +865,10 @@ Result VmafQualityRunner::run(Asset asset, int (*read_frame)(float *ref_data, fl
     free_array(&psnr_array);
     free_array(&ssim_array);
     free_array(&ms_ssim_array);
+
+    free_array(&dlb_mean_deitp_array);
+    free_array(&dlb_max_deitp_array);
+    free_array(&dlb_sd_deitp_array);
 
     return result;
 }
@@ -951,9 +1003,10 @@ static const char VMAFOSS_DOC_VERSION[] = "1.5.3";
 
 double RunVmaf(const char* fmt, int width, int height,
                int (*read_frame)(float *ref_data, float *main_data, float *temp_data, int stride, void *user_data),
+               int (*read_frame_cb_cr)(float *ref_data, float *main_data, float *ref_data_cb, float *main_data_cb, float *ref_data_cr, float *main_data_cr, float *temp_data, int stride_byte, void *user_data),
                void *user_data, const char *model_path, const char *log_path, const char *log_fmt,
                bool disable_clip, bool enable_transform,
-               bool do_psnr, bool do_ssim, bool do_ms_ssim,
+               bool do_psnr, bool do_ssim, bool do_ms_ssim, bool do_deitp,
                const char *pool_method, int n_thread, int n_subsample, bool enable_conf_interval)
 {
 
@@ -979,8 +1032,8 @@ double RunVmaf(const char* fmt, int width, int height,
 
     Timer timer;
     timer.start();
-    Result result = runner_ptr->run(asset, read_frame, user_data, disable_clip, enable_transform,
-                               do_psnr, do_ssim, do_ms_ssim, n_thread, n_subsample);
+    Result result = runner_ptr->run(asset, read_frame, read_frame_cb_cr, user_data, disable_clip, enable_transform,
+                                    do_psnr, do_ssim, do_ms_ssim, do_deitp, n_thread, n_subsample);
     timer.stop();
 
     if (pool_method != NULL && (strcmp(pool_method, "min")==0))

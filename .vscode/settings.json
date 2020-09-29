@@ -1,0 +1,26 @@
+{
+    "files.associations": {
+        "array": "cpp",
+        "atomic": "cpp",
+        "*.tcc": "cpp",
+        "cstddef": "cpp",
+        "string_view": "cpp",
+        "algorithm": "cpp",
+        "memory": "cpp",
+        "cdeutil.h": "c",
+        "kdetype.h": "c",
+        "kcdetype.h": "c",
+        "iomanip": "cpp",
+        "cdetype.h": "c"
+    },
+    "python.testing.unittestArgs": [
+        "-v",
+        "-s",
+        "./python",
+        "-p",
+        "*_test.py"
+    ],
+    "python.testing.pytestEnabled": false,
+    "python.testing.nosetestsEnabled": false,
+    "python.testing.unittestEnabled": true
+}

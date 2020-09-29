@@ -19,3 +19,8 @@
 
 void picture_copy(float *dst, ptrdiff_t dst_stride, VmafPicture *src,
                   int offset, unsigned bpc);
+
+void picture_copy_no_scale(float *dst, ptrdiff_t dst_stride, VmafPicture *src,
+                  int offset, unsigned bpc);
+
+void picture_copy_chroma_no_scale(float *dst, VmafPicture *src, int offset, unsigned bpc, VmafPictureChannel ch);

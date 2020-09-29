@@ -213,10 +213,12 @@ class DisplayConfig(object):
         if 'write_to_dir' in kwargs:
             format = kwargs['format'] if 'format' in kwargs else 'png'
             filedir = kwargs['write_to_dir'] if kwargs['write_to_dir'] is not None else VmafConfig.workspace_path('output')
+            dataset_name = '_' + kwargs['data_set_name'] if 'data_set_name' in kwargs else ''
+            model_name = '_' + kwargs['model_name'] if 'model_name' in kwargs else ''
             if not os.path.exists(filedir):
                 os.makedirs(filedir)
             for fignum in plt.get_fignums():
                 fig = plt.figure(fignum)
-                fig.savefig(os.path.join(filedir, str(fignum) + '.' + format), format=format)
+                fig.savefig(os.path.join(filedir, str(fignum) + dataset_name + model_name + '.' + format), format=format)
         else:
             plt.show()

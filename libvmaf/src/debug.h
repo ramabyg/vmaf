@@ -19,6 +19,8 @@
 #ifndef DEBUG_H_
 #define DEBUG_H_
 
+#define PRINT_PROGRESS 1
+
 #if PRINT_PROGRESS
   #define dbg_printf(...) printf(__VA_ARGS__)
 #else

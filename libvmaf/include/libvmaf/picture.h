@@ -28,6 +28,12 @@ enum VmafPixelFormat {
     VMAF_PIX_FMT_YUV444P,
 };
 
+typedef enum  {
+    VMAF_Luma,
+    VMAF_Cb,
+    VMAF_Cr,
+}VmafPictureChannel;
+
 typedef struct VmafRef VmafRef;
 
 typedef struct {

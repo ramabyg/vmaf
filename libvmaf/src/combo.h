@@ -33,6 +33,11 @@ extern "C" {
 typedef struct
 {
     int (*read_frame)(float *ref_data, float *main_data, float *temp_data, int stride, void *user_data);
+    // pointer to read chroma buffers & convert to 444
+    int (*read_frame_cb_cr)(float *ref_data, float *main_data,
+                            float *ref_data_cb, float *main_data_cb,
+                            float *ref_data_cr, float *main_data_cr,
+                            float *temp_data, int stride, void *user_data);
     void *user_data;
     int w;
     int h;
@@ -61,6 +66,9 @@ typedef struct
     DArray *psnr_array;
     DArray *ssim_array;
     DArray *ms_ssim_array;
+    DArray *dlb_mean_deitp_array;
+    DArray *dlb_max_deitp_array;
+    DArray *dlb_sd_deitp_array;
     char *errmsg;
     int n_subsample;
 
@@ -75,6 +83,17 @@ typedef struct
     BLUR_BUF_ARRAY blur_buf_array;
     BLUR_BUF_ARRAY ref_buf_array;
     BLUR_BUF_ARRAY dis_buf_array;
+
+    /*
+     * Chroma buffers are needed for DEITP and DESITP calculations
+     * So have place holders and create instead of ignoring color data
+     */
+    BLUR_BUF_ARRAY ref_buf_no_conv_array;
+    BLUR_BUF_ARRAY ref_buf_cb_array;
+    BLUR_BUF_ARRAY ref_buf_cr_array;
+    BLUR_BUF_ARRAY dis_buf_cb_array;
+    BLUR_BUF_ARRAY dis_buf_cr_array;
+
     DArray *motion_score_compute_flag_array;
     int ret;
 
@@ -82,35 +101,39 @@ typedef struct
 
 void* combo_threadfunc(void* vmaf_thread_data);
 
-int combo(int (*read_frame)(float *ref_data, float *main_data, float *temp_data, int stride, void *user_data), void *user_data, int w, int h, const char *fmt,
-        DArray *adm_num_array,
-        DArray *adm_den_array,
-        DArray *adm_num_scale0_array,
-        DArray *adm_den_scale0_array,
-        DArray *adm_num_scale1_array,
-        DArray *adm_den_scale1_array,
-        DArray *adm_num_scale2_array,
-        DArray *adm_den_scale2_array,
-        DArray *adm_num_scale3_array,
-        DArray *adm_den_scale3_array,
-        DArray *motion_array,
-        DArray *motion2_array,
-        DArray *vif_num_scale0_array,
-        DArray *vif_den_scale0_array,
-        DArray *vif_num_scale1_array,
-        DArray *vif_den_scale1_array,
-        DArray *vif_num_scale2_array,
-        DArray *vif_den_scale2_array,
-        DArray *vif_num_scale3_array,
-        DArray *vif_den_scale3_array,
-        DArray *vif_array,
-        DArray *psnr_array,
-        DArray *ssim_array,
-        DArray *ms_ssim_array,
-        char *errmsg,
-        int n_thread,
-        int n_subsample
-);
+int combo(int (*read_frame)(float *ref_data, float *main_data, float *temp_data, int stride, void *user_data),
+          int (*read_frame_cb_cr)(float *ref_data, float *main_data, float *ref_data_cb, float *main_data_cb, float *ref_data_cr, float *main_data_cr, float *temp_data, int stride, void *user_data),
+          void *user_data, int w, int h, const char *fmt,
+          DArray *adm_num_array,
+          DArray *adm_den_array,
+          DArray *adm_num_scale0_array,
+          DArray *adm_den_scale0_array,
+          DArray *adm_num_scale1_array,
+          DArray *adm_den_scale1_array,
+          DArray *adm_num_scale2_array,
+          DArray *adm_den_scale2_array,
+          DArray *adm_num_scale3_array,
+          DArray *adm_den_scale3_array,
+          DArray *motion_array,
+          DArray *motion2_array,
+          DArray *vif_num_scale0_array,
+          DArray *vif_den_scale0_array,
+          DArray *vif_num_scale1_array,
+          DArray *vif_den_scale1_array,
+          DArray *vif_num_scale2_array,
+          DArray *vif_den_scale2_array,
+          DArray *vif_num_scale3_array,
+          DArray *vif_den_scale3_array,
+          DArray *vif_array,
+          DArray *psnr_array,
+          DArray *ssim_array,
+          DArray *ms_ssim_array,
+          DArray *dlb_mean_deitp_array,
+          DArray *dlb_max_deitp_array,
+          DArray *dlb_sd_deitp_array,
+          char *errmsg,
+          int n_thread,
+          int n_subsample);
 
 #ifdef __cplusplus
 }

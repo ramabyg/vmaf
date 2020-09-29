@@ -210,3 +210,4 @@ class IntegerAdmFeatureExtractor(VmafrcFeatureExtractorMixin, FeatureExtractor):
         logger = self.logger
 
         ExternalProgramCaller.call_vmafrc_single_feature('adm', yuv_type, ref_path, dis_path, w, h, log_file_path, logger)
+

@@ -322,6 +322,32 @@ def run_test_on_dataset(test_dataset, runner_class, ax,
     if processes is not None:
         assert parallelize is True
 
+    # Create Optinal Dictionary from data set for DEITP params
+    if not optional_dict:
+        optional_dict = {}
+
+    if hasattr(test_dataset, 'eotf'):
+        optional_dict['eotf'] = test_dataset.eotf
+    if hasattr(test_dataset, 'gamma'):
+        optional_dict['gamma'] = test_dataset.gamma
+    if hasattr(test_dataset, 'clrFmt'):
+        optional_dict['clrFmt'] = test_dataset.clrFmt
+    if hasattr(test_dataset, 'minLum'):
+        optional_dict['minLum'] = test_dataset.minLum
+    if hasattr(test_dataset, 'maxLum'):
+        optional_dict['maxLum'] = test_dataset.maxLum
+    if hasattr(test_dataset, 'Yuv2RgbExt'):
+        optional_dict['Yuv2RgbExt'] = test_dataset.Yuv2RgbExt
+    if hasattr(test_dataset, 'YuvXferSpec'):
+        optional_dict['YuvXferSpec'] = test_dataset.YuvXferSpec
+    if hasattr(test_dataset, 'Rng'):
+        optional_dict['Rng'] = test_dataset.Rng
+    if hasattr(test_dataset, 'RgbDef'):
+        optional_dict['RgbDef'] = test_dataset.RgbDef
+    if not optional_dict:
+        optional_dict = None
+
+    
     # run
     runner = runner_class(
         test_assets,
@@ -386,7 +412,6 @@ def run_test_on_dataset(test_dataset, runner_class, ax,
         num_models = 1
 
     print('Stats on testing data: {}'.format(model_type.format_stats_for_print(stats)))
-
     # printing stats if multiple models are present
     if 'SRCC_across_model_distribution' in stats \
             and 'PCC_across_model_distribution' in stats \
@@ -460,6 +485,30 @@ def train_test_vmaf_on_dataset(train_dataset, test_dataset,
 
     processes = kwargs['processes'] if 'processes' in kwargs else None
 
+    # Create Optinal Dictionary from data set for DEITP params
+    optional_dict = {}
+
+    if hasattr(train_dataset, 'eotf'):
+        optional_dict['eotf'] = train_dataset.eotf
+    if hasattr(train_dataset, 'gamma'):
+        optional_dict['gamma'] = train_dataset.gamma
+    if hasattr(train_dataset, 'clrFmt'):
+        optional_dict['clrFmt'] = train_dataset.clrFmt
+    if hasattr(train_dataset, 'minLum'):
+        optional_dict['minLum'] = train_dataset.minLum
+    if hasattr(train_dataset, 'maxLum'):
+        optional_dict['maxLum'] = train_dataset.maxLum
+    if hasattr(train_dataset, 'Yuv2RgbExt'):
+        optional_dict['Yuv2RgbExt'] = train_dataset.Yuv2RgbExt
+    if hasattr(train_dataset, 'YuvXferSpec'):
+        optional_dict['YuvXferSpec'] = train_dataset.YuvXferSpec
+    if hasattr(train_dataset, 'Rng'):
+        optional_dict['Rng'] = train_dataset.Rng
+    if hasattr(train_dataset, 'RgbDef'):
+        optional_dict['RgbDef'] = train_dataset.RgbDef
+    if not optional_dict:
+        optional_dict = None
+    
     train_fassembler = FeatureAssembler(
         feature_dict=feature_param.feature_dict,
         feature_option_dict=None,
@@ -468,7 +517,7 @@ def train_test_vmaf_on_dataset(train_dataset, test_dataset,
         fifo_mode=fifo_mode,
         delete_workdir=True,
         result_store=result_store,
-        optional_dict=None,
+        optional_dict=optional_dict,
         optional_dict2=None,
         parallelize=parallelize,
         processes=processes,
@@ -524,7 +573,7 @@ def train_test_vmaf_on_dataset(train_dataset, test_dataset,
         train_ax.set_xlabel('True Score')
         train_ax.set_ylabel("Predicted Score")
         train_ax.grid()
-        train_ax.set_title("Dataset: {dataset}, Model: {model}\n{stats}".format(
+        train_ax.set_title("Dataset: {dataset} \n Model: {model}\n{stats}".format(
             dataset=train_dataset.dataset_name,
             model=model.model_id,
             stats=model_class.format_stats_for_plot(train_stats)
@@ -553,6 +602,29 @@ def train_test_vmaf_on_dataset(train_dataset, test_dataset,
             test_dataset_aggregate = subjective_model.to_aggregated_dataset(**kwargs)
             test_raw_assets = test_assets
             test_assets = read_dataset(test_dataset_aggregate, **kwargs)
+        # Create Optinal Dictionary from data set for DEITP params
+        optional_dict = {}
+        if hasattr(test_dataset, 'eotf'):
+            optional_dict['eotf'] = test_dataset.eotf
+        if hasattr(test_dataset, 'gamma'):
+            optional_dict['gamma'] = test_dataset.gamma
+        if hasattr(test_dataset, 'clrFmt'):
+            optional_dict['clrFmt'] = test_dataset.clrFmt
+        if hasattr(test_dataset, 'minLum'):
+            optional_dict['minLum'] = test_dataset.minLum
+        if hasattr(test_dataset, 'maxLum'):
+            optional_dict['maxLum'] = test_dataset.maxLum
+        if hasattr(test_dataset, 'Yuv2RgbExt'):
+            optional_dict['Yuv2RgbExt'] = test_dataset.Yuv2RgbExt
+        if hasattr(test_dataset, 'YuvXferSpec'):
+            optional_dict['YuvXferSpec'] = test_dataset.YuvXferSpec
+        if hasattr(test_dataset, 'Rng'):
+            optional_dict['Rng'] = test_dataset.Rng
+        if hasattr(test_dataset, 'RgbDef'):
+            optional_dict['RgbDef'] = test_dataset.RgbDef
+        if not optional_dict:
+            optional_dict = None
+
 
         test_fassembler = FeatureAssembler(
             feature_dict=feature_param.feature_dict,
@@ -562,7 +634,7 @@ def train_test_vmaf_on_dataset(train_dataset, test_dataset,
             fifo_mode=fifo_mode,
             delete_workdir=True,
             result_store=result_store,
-            optional_dict=None,
+            optional_dict=optional_dict,
             optional_dict2=None,
             parallelize=True,
         )

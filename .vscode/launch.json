@@ -1,0 +1,214 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: Current File",
+            "type": "python",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "Python: run vmaf training",
+            "type": "python",
+            "request": "launch",
+            "program": "/home/rama/rama/vmaf/vmaf_mirror/vmaf_private/python/vmaf/script/run_vmaf_training.py",
+            "console": "integratedTerminal",
+            "stopOnEntry": true,
+            "args": [
+                "/home/rama/rama/vmaf/vmaf_mirror/vmaf_private/python/test/resource/example_dataset_deitp.py",
+                "/home/rama/rama/vmaf/vmaf_mirror/vmaf_private/python/test/resource/vmaf_deitp_params.py",
+                "/home/rama/rama/vmaf/vmaf_mirror/vmaf_private/python/test/resource/vmaf_deitp_params.py",
+            //     "/home/rama/rama/vmaf/vmaf_mirror/vmaf_private/resource/dataset/test_data_set.py",
+            //     "/home/rama/rama/vmaf/vmaf_mirror/vmaf_private/resource/feature_param/vmaf_feature_v2.py",
+            //     "/home/rama/rama/vmaf/vmaf_mirror/vmaf_private/resource/model_param/libsvmnusvr_v2.py",
+                 "/home/rama/rama/vmaf/vmaf_mirror/vmaf_private/workspace/model/test_model.pkl",
+            //    // "--parallelize",
+               // "--cache-result",
+                "--save-plot",
+                "/home/rama/rama/vmaf/vmaf_mirror/vmaf_private/workspace/output",
+            ],
+            "env": {
+                "PYTHONPATH": "python"
+            }
+        },
+        {
+            "name": "Python: run deitp unit test",
+            "type": "python",
+            "request": "launch",
+           // "program": "/home/rama/rama/vmaf/vmaf_mirror/vmaf_private/python/test/vmafrc_deitp_feature_extractor_test.py",
+            "program": "/home/rama/rama/vmaf/vmaf_mirror/vmaf_private/python/test/command_line_test.py",
+            //"cwd": "/home/rama/rama/vmaf/vmaf_rama_fork/vmaf/",
+            "console": "integratedTerminal",
+            "stopOnEntry": true,
+            //"python": "python",
+            "args": [
+               // "DeitpFeatureExtractorTest.test_float_deitp_ictxp422p10le_bt2020_fullrng",
+               "CommandLineTest.test_run_testing_vmaf"
+            ],
+            "env": {"PYTHONPATH": "python"}
+        },
+        {
+            "name": "Python: run_deitp_plus_vmaf",
+            "type": "python",
+            "request": "launch",
+            "program": "/home/rama/rama/vmaf/vmaf_mirror/vmaf_private/python/vmaf/script/run_deitp_plus_vmaf.py",
+            //"cwd": "/home/rama/rama/vmaf/vmaf_rama_fork/vmaf/",
+            "console": "integratedTerminal",
+            "stopOnEntry": true,
+            //"python": "python",
+            "args": [
+                "yuv420p",
+               // "1920",
+               // "1080",
+               "576",
+               "324",
+                //"../../data/NFLX_dataset/ref/Seeking_25fps.yuv",
+                "../../data/yuv/src01_hrc00_576x324.yuv",
+                //"../../data/NFLX_dataset/intervered/Seeking_95_1080_20000_inverted.yuv",
+                "../../data/yuv/src01_hrc01_576x324.yuv",
+               // "--model",
+                //"./workspace/model/test_model_nflx_data_set_no_deitp.pkl",
+                //"./workspace/model/test_model_nflx_data_set_deitp.pkl",
+               // "./workspace/model/nflx_data_set_yDeitp_nX0ySDyMAX.pkl",
+                "--out-fmt",
+                "json",
+                "--eotf",
+                "0"
+
+            ],
+            "env": {
+                "PYTHONPATH": "python"
+            }
+        },
+        {
+            "name": "(gdb) Launch vmaf_rc",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "/home/rama/rama/vmaf/vmaf_mirror/vmaf_private/libvmaf/build/tools/vmaf_rc",
+            "stopAtEntry": true,
+            "cwd": "/home/rama/rama/vmaf/vmaf_mirror/vmaf_private/libvmaf/build/",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ],
+            "args": [
+                "-r",
+              //  "../../../../data/yuv/src01_hrc00_576x324.yuv",
+               // "../../python/test/resource/yuv/src01_hrc00_576x324.yuv420p10le.yuv",
+                //"../../python/test/resource/yuv/src01_hrc00_576x324.yuv420p16le.yuv",
+               // "../../python/test/resource/yuv/src01_hrc00_576x324_yuv422p.yuv",
+                //"../../python/test/resource/yuv/src01_hrc00_576x324_yuv444p.yuv",
+                //"../../python/test/resource/yuv/src01_hrc00_576x324_yuv444p10le.yuv",
+               // "../../python/test/resource/yuv/src01_hrc00_576x324_yuv444p12le.yuv",
+                //"../../../../data/yuv/sparks_ref_480x270.yuv42010le.yuv",
+               // "../../../../data/yuv422p_converted/src01_hrc00_576x324_yuv422i_yuv422p.yuv",
+               // "../../../../data/yuv444p_converted/src01_hrc00_576x324_yuv444p.yuv",
+                //"../../../../data/yuv444p_converted/src01_hrc00_576x324_yuv444p10le.yuv",
+                //"../../../../data/yuv444p_converted/src01_hrc00_576x324_yuv444p12le.yuv",
+                //"/home/rama/rama/vmaf/data/uhd/ref/ABMM_A__28_13_28_18__Dovi5VvhevceCrfVE__3840_2160__qp18_yuv420p12le.yuv",
+                //"../../../../data/yuv/sparks_ref_480x270.yuv42010le.yuv",
+                "../../../../data/yuv/src01_hrc00_576x324.yuv422p10le.yuv",
+               // "../../../../data/NFLX_dataset/ref/ElFuente2_30fps.yuv",
+                "-d",
+               // "../../../../data/yuv/src01_hrc01_576x324.yuv",
+               //"../../python/test/resource/yuv/src01_hrc01_576x324.yuv420p10le.yuv"
+               //"../../python/test/resource/yuv/src01_hrc01_576x324.yuv420p16le.yuv"
+               //"../../python/test/resource/yuv/src01_hrc01_576x324_yuv422p.yuv",
+               //"../../python/test/resource/yuv/src01_hrc01_576x324_yuv444p.yuv",
+               //"../../python/test/resource/yuv/src01_hrc01_576x324_yuv444p10le.yuv",
+               //"../../python/test/resource/yuv/src01_hrc01_576x324_yuv444p12le.yuv",
+                //"../../../../data/yuv/sparks_dis_480x270.yuv42010le.yuv",
+                //"../../../../data/yuv422p_converted/src01_hrc01_576x324_yuv422i_yuv422p.yuv",
+               // "../../../../data/yuv444p_converted/src01_hrc01_576x324_yuv444p.yuv",
+                //"../../../../data/yuv444p_converted/src01_hrc01_576x324_yuv444p10le.yuv",
+                //"../../../../data/yuv444p_converted/src01_hrc01_576x324_yuv444p12le.yuv",
+                //"../../../../data/yuv/sparks_dis_480x270.yuv42010le.yuv",
+                "../../../../data/yuv/src01_hrc01_576x324.yuv422p10le.yuv",
+                //"/home/rama/rama/vmaf/data/uhd/dis/ABMM_A__28_13_28_18__Dovi5VvhevceCrfVE__3840_2160__qp22_yuv420p12le_scaled.yuv",
+                //"../../../../data/NFLX_dataset/intervered/ElFuente2_90_1080_20000_inverted.yuv",
+                //"../../../../data/NFLX_dataset/dis/ElFuente2_90_1080_20000.yuv",
+                "-p",
+               // "444",
+               // "420",
+                "422"
+                "-w",
+                //"3840",
+                "576",
+                //"480",
+               // "1920",
+                "-h",
+                //"270",
+                "324",
+                //"2160",
+                //"1080",
+                "-b",
+               // "8",
+                "10",
+               //"16",
+               // "12",
+                //"-m",
+                //"path=../../model/vmaf_v0.6.1.pkl",
+                "--no_prediction",
+               // "--feature",
+               // "float_ssim",
+                "--feature",
+                "deitp",
+               // "deitp=eotf=0:gamma=2.4:clrFmt=0:minLum=0.005:maxLum=100.0:Yuv2RgbExt='false':YuvXferSpec=2:Rng=0:RgbDef=2",
+                //"deitp=eotf=1:gamma=2.4:clrFmt=4:minLum=0.005:maxLum=100.0:Yuv2RgbExt='false':YuvXferSpec=3:Rng=1:RgbDef=3",
+               // "--feature",
+               // "float_ssim",
+               // "deitp",
+               // "--feature",
+               // "float_motion=debug=true"
+                "-o",
+                "result.xml",
+                //"../../../data/output/ElFuente2_90_1080_20000_inverted.xml",
+                "--subsample",
+                "1",
+                //"--threads",
+                //"8",
+            ]
+        },
+        {
+            "name": "Python: run testing",
+            "type": "python",
+            "request": "launch",
+            "program": "/home/rama/rama/vmaf/vmaf_mirror/vmaf_private/python/vmaf/script/run_testing.py",
+            //"cwd": "/home/rama/rama/vmaf/vmaf_rama_fork/vmaf/",
+            "console": "integratedTerminal",
+            "stopOnEntry": true,
+            //"python": "python",
+            "args": [
+                "Deitp_VMAF",
+                //"/home/rama/rama/vmaf/vmaf_rama_fork/vmaf/resource/dataset/NFLX_dataset_public_inverted.py",
+               // "/home/rama/rama/vmaf/vmaf_rama_fork/vmaf/resource/dataset/NFLX_dataset_public_small.py",
+               "/home/rama/rama/vmaf/vmaf_mirror/vmaf_private/python/test/resource/example_dataset_deitp.py",
+                "--vmaf-model",
+                "workspace/model/nflx_data_set_yDeitp_nX0ySDnMAX.pkl",
+                //"/home/rama/rama/vmaf/vmaf_rama_fork/vmaf/workspace/model/test_model_nflx_data_set_deitp_mean_only_with_inv_data_set.pkl",
+               // "/home/rama/rama/vmaf/vmaf_rama_fork/vmaf/workspace/model/nflx_data_set_deitp_nX0ySDnMAX.pkl",
+               // "--parallelize",
+                "--print-result",
+                "--cache-result",
+               // "--save-plot",
+               // "/home/rama/rama/vmaf/vmaf_rama_fork/vmaf/workspace/output",
+                "--save-result-file",
+                "/home/rama/rama/vmaf/vmaf_rama_fork/vmaf/workspace/output/nflx_data_set_deitp_nX0ySDnMAX.xlsx"
+            ],
+            "env": {
+                "PYTHONPATH": "python"
+            }
+        },
+
+    ]
+}

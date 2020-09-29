@@ -12,7 +12,7 @@ from vmaf.config import DisplayConfig
 
 from vmaf.core.result_store import FileSystemResultStore
 from vmaf.tools.misc import import_python_file, get_cmd_option, cmd_option_exists
-from vmaf.core.quality_runner import QualityRunner, VmafQualityRunner, BootstrapVmafQualityRunner
+from vmaf.core.quality_runner import QualityRunner, VmafQualityRunner, BootstrapVmafQualityRunner, DlbDeitpVmafQualityRunner
 from vmaf.core.matlab_quality_runner import STMADQualityRunner, SpEEDMatlabQualityRunner, StrredQualityRunner, StrredOptQualityRunner
 from vmaf.routine import run_test_on_dataset, print_matplotlib_warning
 from vmaf.tools.stats import ListStats
@@ -55,6 +55,8 @@ def main():
     suppress_plot = cmd_option_exists(sys.argv, 3, len(sys.argv), '--suppress-plot')
     vmaf_phone_model = cmd_option_exists(sys.argv, 3, len(sys.argv), '--vmaf-phone-model')
 
+    
+
     pool_method = get_cmd_option(sys.argv, 3, len(sys.argv), '--pool')
     if not (pool_method is None
             or pool_method in POOL_METHODS):
@@ -96,8 +98,9 @@ def main():
         return 1
 
     if vmaf_model_path is not None and runner_class != VmafQualityRunner and \
-                    runner_class != BootstrapVmafQualityRunner:
-        print("Input error: only quality_type of VMAF accepts --vmaf-model.")
+                        runner_class != BootstrapVmafQualityRunner and \
+                        runner_class != DlbDeitpVmafQualityRunner:
+        print("Input error: only quality_type of VMAF or DEITP_VMAF accepts --vmaf-model.")
         print_usage()
         return 2
 
@@ -167,7 +170,10 @@ def main():
         if save_plot_dir is None:
             DisplayConfig.show()
         else:
-            DisplayConfig.show(write_to_dir=save_plot_dir)
+           # DisplayConfig.show(write_to_dir=save_plot_dir)
+            DisplayConfig.show(write_to_dir=save_plot_dir,
+                               data_set_name=test_dataset.dataset_name,
+                               model_name=os.path.splitext(vmaf_model_path.split("/")[-1])[0])
 
     except ImportError:
         print_matplotlib_warning()
@@ -187,10 +193,44 @@ def main():
                                           enable_transform_score=enable_transform_score
                                           )
 
+    save_result_file = get_cmd_option(sys.argv, 3, len(sys.argv), '--save-result-file')
+    
     if print_result:
+        import pandas as pd
+        if save_result_file is not None:
+            writer = pd.ExcelWriter(save_result_file, mode='ab')
         for result in results:
-            print(result)
-            print('')
+            if save_result_file is None:
+                pd.set_option("display.max_rows", None,
+                              "display.max_columns", None)
+                #print(result.to_xml())
+                #print(str(result.to_dataframe()))
+                #print(str(result.to_dataframe().to_dict()))
+                #print('')
+                predicted_score = result[runner_class.get_score_key()]
+                groundtruth_score = result.asset.groundtruth
+                print('asset ID: {} predicted: {} groundtruth: {}'.format(result.asset.asset_id,int(predicted_score),int(groundtruth_score)))
+            else:
+                list_scores_key = result.get_ordered_list_scores_key()
+                list_scores = list(map(lambda key: result.result_dict[key],list_scores_key))
+                df = pd.DataFrame()
+                for list_score, scores in zip(list_scores_key,list_scores):
+                    df[list_score] = scores
+                    
+                predicted_score = result[runner_class.get_score_key()]
+                groundtruth_score = result.asset.groundtruth
+                asset_sheet_name = "asset_" + str(result.asset.asset_id) + \
+                                    "_ps_" + str(int(predicted_score)) + \
+                                    "_gt_" + str(int(groundtruth_score))
+                df.to_excel(writer, sheet_name=asset_sheet_name)
+                print('asset ID: {} predicted: {} groundtruth: {}'.format(result.asset.asset_id,int(predicted_score),int(groundtruth_score)))
+                writer.save()
+               # print(result.asset.asset_id)
+        if save_result_file is not None:
+            if writer:
+                writer.close()
+      
+
 
     return 0
 

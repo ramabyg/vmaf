@@ -56,9 +56,28 @@ extern "C" {
   * The rest can be safely be left at 0 unless the user has specific requirements
   */
 
-int compute_vmaf(double* vmaf_score, char* fmt, int width, int height, int (*read_frame)(float *ref_data, float *main_data, float *temp_data, int stride_byte, void *user_data),
-				 void *user_data, char *model_path, char *log_path, char *log_fmt, int disable_clip, int disable_avx, int enable_transform, int phone_model, int do_psnr,
-				 int do_ssim, int do_ms_ssim, char *pool_method, int n_thread, int n_subsample, int enable_conf_interval);
+ int compute_vmaf(double *vmaf_score,
+                 char *fmt,
+                 int width,
+                 int height,
+                 int (*read_frame)(float *ref_data, float *main_data, float *temp_data, int stride_byte, void *user_data),
+                 int (*read_frame_cb_cr)(float *ref_data, float *main_data, float *ref_data_cb, float *main_data_cb, float *ref_data_cr, float *main_data_cr, float *temp_data, int stride_byte, void *user_data),
+                 void *user_data,
+                 char *model_path,
+                 char *log_path,
+                 char *log_fmt,
+                 int disable_clip,
+                 int disable_avx,
+                 int enable_transform,
+                 int phone_model,
+                 int do_psnr,
+                 int do_ssim,
+                 int do_ms_ssim,
+                 int do_deitp,
+                 char *pool_method,
+                 int n_thread,
+                 int n_subsample,
+                 int enable_conf_interval);
 
 #ifdef __cplusplus
 }

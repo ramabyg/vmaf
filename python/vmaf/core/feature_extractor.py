@@ -101,6 +101,70 @@ class FeatureExtractor(Executor):
         return feature_result
 
 
+class FloatDeitpFeatureExtractor(FeatureExtractor):
+    TYPE = "DEITP_feature"
+    VERSION = '1.0' # Initial version of extractor
+    ATOM_FEATURES = ['deitp_max', 'deitp_mean', 'deitp_sd',
+                      'deTP_max', 'deTP_mean', 'deTP_sd']
+
+    ATOM_FEATURES_TO_VMAFRC_KEY_DICT = dict(zip(ATOM_FEATURES, ATOM_FEATURES))
+
+    # ATOM_FEATURES_TO_VMAFRC_KEY_DICT = {
+    #     'deitp_max': 'deitp_max',
+    #     'deitp_mean': 'deitp_mean',
+    #     'deitp_sd': 'deitp_sd'
+    # }
+
+    def _generate_result(self, asset):
+        # routine to call the command-line executable and generate feature
+        # scores in the log file.
+
+        quality_width, quality_height = asset.quality_width_height
+        log_file_path = self._get_log_file_path(asset)
+
+        yuv_type = self._get_workfile_yuv_type(asset)
+        ref_path = asset.ref_procfile_path
+        dis_path = asset.dis_procfile_path
+        w = quality_width
+        h = quality_height
+        logger = self.logger
+
+        ExternalProgramCaller.call_vmafrc_single_feature('deitp', yuv_type, ref_path, dis_path, w, h,
+                                                         log_file_path, logger, options=self.optional_dict)
+
+    @override(FeatureExtractor)
+    def _get_feature_scores(self, asset):
+
+        assert hasattr(self, '_get_log_file_path')
+        assert hasattr(self, 'ATOM_FEATURES')
+        assert hasattr(self, 'ATOM_FEATURES_TO_VMAFRC_KEY_DICT')
+        assert hasattr(self, 'get_scores_key')
+
+        log_file_path = self._get_log_file_path(asset)
+        tree = ElementTree.parse(log_file_path)
+        root = tree.getroot()
+
+        feature_scores = [[] for _ in self.ATOM_FEATURES]
+
+        for frame in root.findall('frames/frame'):
+            for i_feature, feature in enumerate(self.ATOM_FEATURES):
+                try:
+                    feature_scores[i_feature].append(
+                        float(frame.attrib[self.ATOM_FEATURES_TO_VMAFRC_KEY_DICT[feature]]))
+                except KeyError:
+                    pass  # some features may be missing
+
+        for i_feature, feature in enumerate(self.ATOM_FEATURES):
+            assert len(feature_scores[i_feature]) != 0
+            assert len(feature_scores[i_feature]) == len(feature_scores[0])
+
+        feature_result = {}
+        for i_feature, feature in enumerate(self.ATOM_FEATURES):
+            feature_result[self.get_scores_key(
+                feature)] = feature_scores[i_feature]
+
+        return feature_result
+
 class VmafrcFeatureExtractorMixin(object):
 
     @override(FeatureExtractor)

@@ -230,6 +230,9 @@ libvmaf_feature_sources = [
     feature_src_dir + 'iqa/convolve.c',
     feature_src_dir + 'iqa/decimate.c',
     feature_src_dir + 'iqa/ssim_tools.c',
+    feature_src_dir + 'KdeProcess.c',
+    feature_src_dir + 'KdeUpSamp.c',
+    feature_src_dir + 'CdeUtil.c',
 ]
 
 libvmaf_feature_static_lib = static_library(
@@ -287,6 +290,7 @@ libvmaf_rc_feature_sources = [
     feature_src_dir + 'integer_vif.c',
     feature_src_dir + 'integer_ssim.c',
     feature_src_dir + 'float_moment.c',
+    feature_src_dir + 'float_deitp.c',
 ]
 
 libvmaf_rc_feature_static_lib = static_library(

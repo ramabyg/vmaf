@@ -50,6 +50,7 @@ setup(
         "h5py>=2.6.0",
         "sureal>=0.4.2",
         "dill>=0.3.1",
+        "openpyxl>=3.0.6"
     ],
     entry_points = {
         'console_scripts': [
@@ -60,6 +61,7 @@ setup(
             'run_testing=vmaf.script.run_testing:main',
             'run_toddnoiseclassifier=vmaf.script.run_toddnoiseclassifier:main',
             'run_vmaf=vmaf.script.run_vmaf:main',
+            'run_deitp_plus_vmaf=vmaf.script.run_deitp_plus_vmaf:main'
             'run_vmaf_cross_validation=vmaf.script.run_vmaf_cross_validation:main',
             'run_vmaf_in_batch=vmaf.script.run_vmaf_in_batch:main',
             'run_vmaf_training=vmaf.script.run_vmaf_training:main',
